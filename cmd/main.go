@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/url"
+	"strconv"
 	"time"
 
 	mqttclient "github.com/automatedhome/flow-meter/pkg/mqttclient"
@@ -25,6 +26,7 @@ type Settings struct {
 	tankMax        DataPoint
 	heaterCritical DataPoint
 	hysteresis     DataPoint
+	expected       DataPoint
 }
 
 type Sensors struct {
@@ -39,25 +41,37 @@ type Actuators struct {
 	sw     BoolPoint //CH == False, DHW == True
 }
 
-type ScheduleCell struct {
-	From        string  `json:"from"`
-	To          string  `json:"to"`
-	Temperature float64 `json:"temperature"`
-}
-
-type Schedule struct {
-	Workday            []ScheduleCell `json:"workday"`
-	Freeday            []ScheduleCell `json:"freeday"`
-	DefaultTemperature float64        `json:"defaultTemperature"`
-}
-
 var settings Settings
 var sensors Sensors
 var actuators Actuators
 var client mqtt.Client
 
 func onMessage(client mqtt.Client, message mqtt.Message) {
-	return
+	value, err := strconv.ParseFloat(string(message.Payload()), 64)
+	if err != nil {
+		return
+	}
+
+	switch message.Topic() {
+	case sensors.roomTemp.addr:
+		sensors.roomTemp.v = value
+	case sensors.tankUp.addr:
+		sensors.tankUp.v = value
+	case sensors.heaterIn.addr:
+		sensors.heaterIn.v = value
+	case sensors.heaterOut.addr:
+		sensors.heaterOut.v = value
+	case settings.tankMin.addr:
+		settings.tankMin.v = value
+	case settings.tankMax.addr:
+		settings.tankMax.v = value
+	case settings.heaterCritical.addr:
+		settings.heaterCritical.v = value
+	case settings.expected.addr:
+		settings.expected.v = value
+	case settings.hysteresis.addr:
+		settings.hysteresis.v = value
+	}
 }
 
 func heater(state bool, reason string) {
@@ -72,10 +86,8 @@ func heater(state bool, reason string) {
 		return
 	}
 
-	if !state {
-		log.Println("Stopping: " + reason)
-		client.Publish(actuators.heater.addr, 0, false, "0")
-	}
+	log.Println("Stopping: " + reason)
+	client.Publish(actuators.heater.addr, 0, false, "0")
 }
 
 func sw(destination string) {
@@ -94,14 +106,8 @@ func sw(destination string) {
 		return
 	}
 
-	if !state {
-		log.Println("Switching actuator in home heating position")
-		client.Publish(actuators.sw.addr, 0, false, "0")
-	}
-}
-
-func isSchedule() (float64, bool) {
-	return 18.0, false
+	log.Println("Switching actuator in home heating position")
+	client.Publish(actuators.sw.addr, 0, false, "0")
 }
 
 func init() {
@@ -119,6 +125,7 @@ func init() {
 
 	settings.heaterCritical = DataPoint{80, "heater/settings/critical"}
 	settings.hysteresis = DataPoint{1, "heater/settings/hysteresis"}
+	settings.expected = DataPoint{18, "heater/settings/expected"}
 	settings.tankMin = DataPoint{45, "heater/settings/tankmin"}
 	settings.tankMax = DataPoint{55, "heater/settings/tankmax"}
 }
@@ -131,7 +138,7 @@ func main() {
 	brokerURL, _ := url.Parse(*broker)
 	var topics []string
 	topics = append(topics, sensors.heaterIn.addr, sensors.heaterOut.addr, sensors.tankUp.addr, sensors.roomTemp.addr)
-	topics = append(topics, settings.heaterCritical.addr, settings.hysteresis.addr, settings.tankMin.addr, settings.tankMax.addr)
+	topics = append(topics, settings.heaterCritical.addr, settings.hysteresis.addr, settings.tankMin.addr, settings.tankMax.addr, settings.expected.addr)
 	client = mqttclient.New(*clientID, brokerURL, topics, onMessage)
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
@@ -155,14 +162,6 @@ func main() {
 			continue
 		}
 
-		// check if now is the time to start heating
-		expected, isTime := isSchedule()
-		if !isTime {
-			heater(false, "not a time for heating")
-			sw("room")
-			continue
-		}
-
 		// Water heating start
 		if sensors.tankUp.v < settings.tankMin.v {
 			heater(true, "water heating")
@@ -176,14 +175,13 @@ func main() {
 		}
 
 		// room heating
-		if sensors.roomTemp.v < expected-settings.hysteresis.v/2 {
+		if sensors.roomTemp.v < settings.expected.v-settings.hysteresis.v/2 {
 			heater(true, "room temperature lower than expected")
 			continue
 		}
 
-		if sensors.roomTemp.v > expected+settings.hysteresis.v/2 {
+		if sensors.roomTemp.v > settings.expected.v+settings.hysteresis.v/2 {
 			heater(false, "expected room temperature achieved")
 		}
-
 	}
 }
