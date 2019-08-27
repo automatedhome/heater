@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/url"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -164,12 +164,12 @@ func main() {
 	client = mqttclient.New(*clientID, brokerURL, topics, onMessage)
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
-	msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
 	// Wait for sensors data
 	for {
 		if sensors.RoomTemp.Value != 0 && sensors.TankUp.Value != 0 && sensors.HeaterIn.Value != 0 && sensors.HeaterOut.Value != 0 {
 			break
 		}
+		msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
 		if sensors.HeaterIn.Value == 300 {
 			msg = append(msg, "heaterIn")
 		}
@@ -186,7 +186,6 @@ func main() {
 		time.Sleep(15 * time.Second)
 	}
 	log.Printf("Starting with sensors data received: %+v\n", sensors)
-
 
 	// run program
 	for {
