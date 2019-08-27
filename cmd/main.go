@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/url"
+	"strings"
 	"strconv"
 	"time"
 
@@ -118,10 +119,10 @@ func init() {
 	actuators.heater = BoolPoint{false, "heater/actuators/burner"} // proxy to "evok/relay/5/set"
 	actuators.sw = BoolPoint{false, "heater/actuators/switch"}     // proxy to "evok/relay/1/set"
 
-	sensors.roomTemp = DataPoint{15.0, "climate/temperature/inside"}
-	sensors.tankUp = DataPoint{0, "tank/temperature/up"}
-	sensors.heaterIn = DataPoint{0, "heater/temperature/in"}
-	sensors.heaterOut = DataPoint{0, "heater/temperature/out"}
+	sensors.roomTemp = DataPoint{300, "climate/temperature/inside"}
+	sensors.tankUp = DataPoint{300, "tank/temperature/up"}
+	sensors.heaterIn = DataPoint{300, "heater/temperature/in"}
+	sensors.heaterOut = DataPoint{300, "heater/temperature/out"}
 
 	settings.heaterCritical = DataPoint{80, "heater/settings/critical"}
 	settings.hysteresis = DataPoint{1, "heater/settings/hysteresis"}
@@ -142,15 +143,29 @@ func main() {
 	client = mqttclient.New(*clientID, brokerURL, topics, onMessage)
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
+	msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
 	// Wait for sensors data
 	for {
 		if sensors.roomTemp.v != 0 && sensors.tankUp.v != 0 && sensors.heaterIn.v != 0 && sensors.heaterOut.v != 0 {
 			break
 		}
-		log.Println("Waiting 15s for sensors data...")
+		if sensors.heaterIn.v == 300 {
+			msg = append(msg, "heaterIn")
+		}
+		if sensors.heaterOut.v == 300 {
+			msg = append(msg, "heaterOut")
+		}
+		if sensors.roomTemp.v == 300 {
+			msg = append(msg, "roomTemp")
+		}
+		if sensors.tankUp.v == 300 {
+			msg = append(msg, "tankUp")
+		}
+		log.Println(strings.Join(msg, " "))
 		time.Sleep(15 * time.Second)
 	}
 	log.Printf("Starting with sensors data received: %+v\n", sensors)
+
 
 	// run program
 	for {
