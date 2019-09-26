@@ -166,7 +166,7 @@ func main() {
 
 	// Wait for sensors data
 	for {
-		if sensors.RoomTemp.Value != 0 && sensors.TankUp.Value != 0 && sensors.HeaterIn.Value != 0 && sensors.HeaterOut.Value != 0 {
+		if sensors.RoomTemp.Value != lockTemp && sensors.TankUp.Value != lockTemp && sensors.HeaterIn.Value != lockTemp && sensors.HeaterOut.Value != lockTemp {
 			break
 		}
 		msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
@@ -187,7 +187,7 @@ func main() {
 	}
 	log.Printf("Starting with sensors data received: %+v\n", sensors)
 
-	// run program
+	// Step 2. - RUN forever
 	for {
 		time.Sleep(1 * time.Second)
 
