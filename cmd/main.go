@@ -16,6 +16,9 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+const ROOM = false
+const WATER = true
+
 var config types.Config
 var settings types.Settings
 var sensors types.Sensors
@@ -77,42 +80,52 @@ func waitForData(lockValue float64) {
 	log.Printf("Starting with sensors data received: %+v\n", sensors)
 }
 
-func heater(state bool, reason string) {
-	if state == heaterState {
+func heater(desiredState bool, reason string) {
+	var msg string
+	if desiredState == heaterState {
 		return
 	}
 
-	heaterState = state
-	if state {
+	if desiredState {
+		msg = "1"
 		log.Println("Starting: " + reason)
-		client.Publish(actuators.Heater, 0, false, "1")
+	} else {
+		msg = "0"
+		log.Println("Stopping: " + reason)
+	}
+
+	token := client.Publish(actuators.Heater, 0, false, msg)
+	token.Wait()
+	if token.Error() != nil {
+		log.Printf("Failed to publish packet: %s", token.Error())
 		return
 	}
 
-	log.Println("Stopping: " + reason)
-	client.Publish(actuators.Heater, 0, false, "0")
+	heaterState = desiredState
 }
 
-func sw(destination string) {
-	state := false
-	if destination == "water" {
-		state = true
-	}
-
-	if switchState == state {
+func sw(desiredState bool) {
+	var msg string
+	if switchState == desiredState {
 		return
 	}
 
-	if state {
+	if desiredState {
+		msg = "1"
 		log.Println("Switching actuator in water heating position")
-		client.Publish(actuators.Switch, 0, false, "1")
-		switchState = true
+	} else {
+		msg = "0"
+		log.Println("Switching actuator in home heating position")
+	}
+
+	token := client.Publish(actuators.Switch, 0, false, msg)
+	token.Wait()
+	if token.Error() != nil {
+		log.Printf("Failed to publish packet: %s", token.Error())
 		return
 	}
 
-	log.Println("Switching actuator in home heating position")
-	client.Publish(actuators.Switch, 0, false, "0")
-	switchState = false
+	switchState = desiredState
 }
 
 func failsafe() bool {
@@ -124,25 +137,39 @@ func failsafe() bool {
 	return false
 }
 
-// water returns true when water heating is ON
-func water(value float64, min float64, max float64) bool {
+// waterHeatingController returns true when water heating is ON
+func waterHeatingController(temperature float64, min float64, max float64) bool {
 	// Water heating start
-	if value < min {
+	if temperature < min {
 		heater(true, "water heating")
 		time.Sleep(1 * time.Second)
-		sw("water")
+		sw(WATER)
 		time.Sleep(1 * time.Second)
 		return true
 	}
 
 	// water heating ends
-	if value >= max {
-		sw("room")
+	if temperature >= max {
+		sw(ROOM)
 		time.Sleep(1 * time.Second)
 		return false
 	}
 
 	return switchState
+}
+
+func roomHeatingController(temperature float64, expected float64, hysteresis float64) {
+	// room heating
+	if temperature < expected-hysteresis/2 {
+		heater(true, "room temperature lower than expected")
+		time.Sleep(1 * time.Second)
+		return
+	}
+
+	if temperature > expected+hysteresis/2 {
+		heater(false, "expected room temperature achieved")
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func init() {
@@ -192,9 +219,16 @@ func main() {
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
 	// Reseting state to OFF
-	client.Publish(actuators.Heater, 0, false, "0")
-	time.Sleep(1 * time.Second)
-	client.Publish(actuators.Switch, 0, false, "0")
+	token := client.Publish(actuators.Heater, 0, false, "0")
+	token.Wait()
+	if token.Error() != nil {
+		log.Fatalf("Failed to publish packet: %s", token.Error())
+	}
+	token = client.Publish(actuators.Switch, 0, false, "0")
+	token.Wait()
+	if token.Error() != nil {
+		log.Fatalf("Failed to publish packet: %s", token.Error())
+	}
 
 	// Wait for sensors data
 	waitForData(lockTemp)
@@ -207,20 +241,10 @@ func main() {
 			continue
 		}
 
-		if water(sensors.TankUp.Value, settings.TankMin.Value, settings.TankMax.Value) {
+		if waterHeatingController(sensors.TankUp.Value, settings.TankMin.Value, settings.TankMax.Value) {
 			continue
 		}
 
-		// room heating
-		if sensors.RoomTemp.Value < settings.Expected.Value-settings.Hysteresis.Value/2 {
-			heater(true, "room temperature lower than expected")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		if sensors.RoomTemp.Value > settings.Expected.Value+settings.Hysteresis.Value/2 {
-			heater(false, "expected room temperature achieved")
-			time.Sleep(1 * time.Second)
-		}
+		roomHeatingController(sensors.RoomTemp.Value, settings.Expected.Value, settings.Hysteresis.Value)
 	}
 }
