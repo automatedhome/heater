@@ -94,10 +94,7 @@ func heater(desiredState bool, reason string) {
 		log.Println("Stopping: " + reason)
 	}
 
-	token := client.Publish(actuators.Heater, 0, false, msg)
-	token.Wait()
-	if token.Error() != nil {
-		log.Printf("Failed to publish packet: %s", token.Error())
+	if err := mqttclient.Publish(client, actuators.Heater, 0, false, msg); err != nil {
 		return
 	}
 
@@ -118,10 +115,7 @@ func sw(desiredState bool) {
 		log.Println("Switching actuator in home heating position")
 	}
 
-	token := client.Publish(actuators.Switch, 0, false, msg)
-	token.Wait()
-	if token.Error() != nil {
-		log.Printf("Failed to publish packet: %s", token.Error())
+	if err := mqttclient.Publish(client, actuators.Switch, 0, false, msg); err != nil {
 		return
 	}
 
@@ -219,15 +213,11 @@ func main() {
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
 	// Reseting state to OFF
-	token := client.Publish(actuators.Heater, 0, false, "0")
-	token.Wait()
-	if token.Error() != nil {
-		log.Fatalf("Failed to publish packet: %s", token.Error())
+	if err := mqttclient.Publish(client, actuators.Heater, 0, false, "0"); err != nil {
+		log.Fatalf("Cannot reset heater. Exiting.")
 	}
-	token = client.Publish(actuators.Switch, 0, false, "0")
-	token.Wait()
-	if token.Error() != nil {
-		log.Fatalf("Failed to publish packet: %s", token.Error())
+	if err := mqttclient.Publish(client, actuators.Switch, 0, false, "0"); err != nil {
+		log.Fatalf("Cannot reset switch. Exiting.")
 	}
 
 	// Wait for sensors data
