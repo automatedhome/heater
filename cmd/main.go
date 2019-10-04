@@ -168,7 +168,7 @@ func main() {
 
 	// Reseting state to OFF
 	client.Publish(actuators.Heater, 0, false, "0")
-	time.sleep(1*time.Second)
+	time.Sleep(1*time.Second)
 	client.Publish(actuators.Switch, 0, false, "0")
 
 	// Wait for sensors data
