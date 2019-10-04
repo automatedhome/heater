@@ -103,19 +103,21 @@ func sw(destination string) {
 	if destination == "water" {
 		state = true
 	}
-	if state == heaterState {
+
+	if switchState == state {
 		return
 	}
 
-	switchState = state
 	if state {
 		log.Println("Switching actuator in water heating position")
 		client.Publish(actuators.Switch, 0, false, "1")
+		switchState = true
 		return
 	}
 
 	log.Println("Switching actuator in home heating position")
 	client.Publish(actuators.Switch, 0, false, "0")
+	switchState = false
 }
 
 func init() {
@@ -166,6 +168,7 @@ func main() {
 
 	// Reseting state to OFF
 	client.Publish(actuators.Heater, 0, false, "0")
+	time.sleep(1*time.Second)
 	client.Publish(actuators.Switch, 0, false, "0")
 
 	// Wait for sensors data
