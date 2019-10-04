@@ -201,29 +201,35 @@ func main() {
 		// failsafe
 		if sensors.HeaterOut.Value >= settings.HeaterCritical.Value {
 			heater(false, "critical heater temperature reached")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		// Water heating start
 		if sensors.TankUp.Value < settings.TankMin.Value {
 			heater(true, "water heating")
+			time.Sleep(1 * time.Second)
 			sw("water")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		// water heating ends
 		if sensors.TankUp.Value >= settings.TankMax.Value {
 			sw("room")
+			time.Sleep(1 * time.Second)
 		}
 
 		// room heating
 		if sensors.RoomTemp.Value < settings.Expected.Value-settings.Hysteresis.Value/2 {
 			heater(true, "room temperature lower than expected")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		if sensors.RoomTemp.Value > settings.Expected.Value+settings.Hysteresis.Value/2 {
 			heater(false, "expected room temperature achieved")
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
