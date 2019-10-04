@@ -82,6 +82,31 @@ func onMessage(client mqtt.Client, message mqtt.Message) {
 	}
 }
 
+func waitForData(lockValue float64) {
+	// Wait for sensors data
+	for {
+		if sensors.RoomTemp.Value != lockValue && sensors.TankUp.Value != lockValue && sensors.HeaterIn.Value != lockValue && sensors.HeaterOut.Value != lockValue {
+			break
+		}
+		msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
+		if sensors.HeaterIn.Value == 300 {
+			msg = append(msg, "heaterIn")
+		}
+		if sensors.HeaterOut.Value == 300 {
+			msg = append(msg, "heaterOut")
+		}
+		if sensors.RoomTemp.Value == 300 {
+			msg = append(msg, "roomTemp")
+		}
+		if sensors.TankUp.Value == 300 {
+			msg = append(msg, "tankUp")
+		}
+		log.Println(strings.Join(msg, " "))
+		time.Sleep(15 * time.Second)
+	}
+	log.Printf("Starting with sensors data received: %+v\n", sensors)
+}
+
 func heater(state bool, reason string) {
 	if state == heaterState {
 		return
@@ -118,6 +143,36 @@ func sw(destination string) {
 	log.Println("Switching actuator in home heating position")
 	client.Publish(actuators.Switch, 0, false, "0")
 	switchState = false
+}
+
+func failsafe() bool {
+	if sensors.HeaterOut.Value >= settings.HeaterCritical.Value {
+		heater(false, "critical heater temperature reached")
+		time.Sleep(1 * time.Second)
+		return true
+	}
+	return false
+}
+
+// water returns true when water heating is ON
+func water(value float64, min float64, max float64) bool {
+	// Water heating start
+	if value < min {
+		heater(true, "water heating")
+		time.Sleep(1 * time.Second)
+		sw("water")
+		time.Sleep(1 * time.Second)
+		return true
+	}
+
+	// water heating ends
+	if value >= max {
+		sw("room")
+		time.Sleep(1 * time.Second)
+		return false
+	}
+
+	return switchState
 }
 
 func init() {
@@ -168,56 +223,22 @@ func main() {
 
 	// Reseting state to OFF
 	client.Publish(actuators.Heater, 0, false, "0")
-	time.Sleep(1*time.Second)
+	time.Sleep(1 * time.Second)
 	client.Publish(actuators.Switch, 0, false, "0")
 
 	// Wait for sensors data
-	for {
-		if sensors.RoomTemp.Value != lockTemp && sensors.TankUp.Value != lockTemp && sensors.HeaterIn.Value != lockTemp && sensors.HeaterOut.Value != lockTemp {
-			break
-		}
-		msg := []string{"Waiting 15s for sensors data. Currently lacking:"}
-		if sensors.HeaterIn.Value == 300 {
-			msg = append(msg, "heaterIn")
-		}
-		if sensors.HeaterOut.Value == 300 {
-			msg = append(msg, "heaterOut")
-		}
-		if sensors.RoomTemp.Value == 300 {
-			msg = append(msg, "roomTemp")
-		}
-		if sensors.TankUp.Value == 300 {
-			msg = append(msg, "tankUp")
-		}
-		log.Println(strings.Join(msg, " "))
-		time.Sleep(15 * time.Second)
-	}
-	log.Printf("Starting with sensors data received: %+v\n", sensors)
+	waitForData(lockTemp)
 
 	// Step 2. - RUN forever
 	for {
 		time.Sleep(1 * time.Second)
 
-		// failsafe
-		if sensors.HeaterOut.Value >= settings.HeaterCritical.Value {
-			heater(false, "critical heater temperature reached")
-			time.Sleep(1 * time.Second)
+		if failsafe() {
 			continue
 		}
 
-		// Water heating start
-		if sensors.TankUp.Value < settings.TankMin.Value {
-			heater(true, "water heating")
-			time.Sleep(1 * time.Second)
-			sw("water")
-			time.Sleep(1 * time.Second)
+		if water(sensors.TankUp.Value, settings.TankMin.Value, settings.TankMax.Value) {
 			continue
-		}
-
-		// water heating ends
-		if sensors.TankUp.Value >= settings.TankMax.Value {
-			sw("room")
-			time.Sleep(1 * time.Second)
 		}
 
 		// room heating
