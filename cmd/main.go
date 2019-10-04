@@ -164,6 +164,10 @@ func main() {
 	client = mqttclient.New(*clientID, brokerURL, topics, onMessage)
 	log.Printf("Connected to %s as %s and waiting for messages\n", *broker, *clientID)
 
+	// Reseting state to OFF
+	client.Publish(actuators.Heater, 0, false, "0")
+	client.Publish(actuators.Switch, 0, false, "0")
+
 	// Wait for sensors data
 	for {
 		if sensors.RoomTemp.Value != lockTemp && sensors.TankUp.Value != lockTemp && sensors.HeaterIn.Value != lockTemp && sensors.HeaterOut.Value != lockTemp {

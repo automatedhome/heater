@@ -3,7 +3,7 @@ actuators:
   heater: "evok/relay/5/set"
   switch: "evok/relay/1/set"
 sensors:
-  heaterIn: 
+  heaterIn:
     address: "heater/temperature/in"
   heaterOut:
     address: "heater/temperature/out"
