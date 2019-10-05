@@ -16,16 +16,20 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-const ROOM = false
-const WATER = true
+const (
+	ROOM  = false
+	WATER = true
+)
 
-var config types.Config
-var settings types.Settings
-var sensors types.Sensors
-var actuators types.Actuators
-var client mqtt.Client
-var heaterState bool
-var switchState bool
+var (
+	config      types.Config
+	settings    types.Settings
+	sensors     types.Sensors
+	actuators   types.Actuators
+	client      mqtt.Client
+	heaterState bool
+	switchState bool
+)
 
 func onMessage(client mqtt.Client, message mqtt.Message) {
 	value, err := strconv.ParseFloat(string(message.Payload()), 64)
@@ -169,9 +173,7 @@ func roomHeatingController(temperature float64, expected float64, hysteresis flo
 func init() {
 	heaterState = false
 	switchState = false
-}
 
-func main() {
 	broker := flag.String("broker", "tcp://127.0.0.1:1883", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
 	clientID := flag.String("clientid", "heater", "A clientid for the connection")
 	configFile := flag.String("config", "/config.yaml", "Provide configuration file with MQTT topic mappings")
@@ -222,8 +224,9 @@ func main() {
 
 	// Wait for sensors data
 	waitForData(lockTemp)
+}
 
-	// Step 2. - RUN forever
+func main() {
 	for {
 		time.Sleep(1 * time.Second)
 
