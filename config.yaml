@@ -17,13 +17,13 @@ settings:
     value: 80
   hysteresis:
     address: "heater/settings/hysteresis"
-    value: 1
+    value: 0.5
   expected:
     address: "heater/settings/expected"
-    value: 18
+    value: 17
   tankMin:
     address: "heater/settings/tankmin"
-    value: 45
+    value: 43
   tankMax:
     address: "heater/settings/tankmax"
-    value: 55
+    value: 48
