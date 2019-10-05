@@ -189,9 +189,9 @@ func main() {
 		return
 	}
 
-	err = yaml.UnmarshalStrict(data, &config)
-	//err = yaml.Unmarshal(data, &config)
-	if err != nil {
+	log.Printf("Starting with following config: %v", data)
+
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		log.Fatalf("error: %v", err)
 	}
 
