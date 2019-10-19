@@ -158,13 +158,13 @@ func waterHeatingController(temperature float64, min float64, max float64) bool 
 
 func roomHeatingController(temperature float64, expected float64, hysteresis float64) {
 	// room heating
-	if temperature < expected-hysteresis/2 {
+	if temperature < expected-hysteresis {
 		heater(true, "room temperature lower than expected")
 		time.Sleep(1 * time.Second)
 		return
 	}
 
-	if temperature > expected+hysteresis/2 {
+	if temperature > expected+hysteresis {
 		heater(false, "expected room temperature achieved")
 		time.Sleep(1 * time.Second)
 	}
@@ -191,7 +191,7 @@ func init() {
 		return
 	}
 
-	log.Printf("Starting with following config: %v", data)
+	log.Printf("Starting with following config: %+v", data)
 
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		log.Fatalf("error: %v", err)
