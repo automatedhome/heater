@@ -19,7 +19,7 @@ settings:
     address: "heater/settings/hysteresis"
     value: 0.2
   expected:
-    address: "heater/settings/expected"
+    address: "heater/expected"
     value: 17
   tankMin:
     address: "heater/settings/tankmin"
