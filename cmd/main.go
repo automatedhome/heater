@@ -191,11 +191,10 @@ func init() {
 		return
 	}
 
-	log.Printf("Starting with following config: %+v", data)
-
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		log.Fatalf("error: %v", err)
 	}
+	log.Printf("Reading following config from config file: %#v", config)
 
 	settings = config.Settings
 	actuators = config.Actuators
