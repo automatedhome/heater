@@ -4,11 +4,15 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/yaml.v2"
 
 	mqttclient "github.com/automatedhome/common/pkg/mqttclient"
@@ -29,6 +33,21 @@ var (
 	client      mqtt.Client
 	heaterState bool
 	switchState bool
+)
+
+var (
+	failsafeTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "heater_failsafe_total",
+		Help: "Increase when failsafe system kicked in",
+	})
+	actuatorMode = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "heater_actuator_mode_binary",
+		Help: "Desired state for heater actuator",
+	})
+	burnerMode = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "heater_burner_mode_binary",
+		Help: "Desired state for heater burner",
+	})
 )
 
 func onMessage(client mqtt.Client, message mqtt.Message) {
@@ -93,9 +112,11 @@ func heater(desiredState bool, reason string) {
 	if desiredState {
 		msg = "1"
 		log.Println("Starting: " + reason)
+		burnerMode.Set(1)
 	} else {
 		msg = "0"
 		log.Println("Stopping: " + reason)
+		burnerMode.Set(0)
 	}
 
 	if err := mqttclient.Publish(client, actuators.Heater, 0, false, msg); err != nil {
@@ -114,11 +135,12 @@ func sw(desiredState bool) {
 	if desiredState {
 		msg = "1"
 		log.Println("Switching actuator in water heating position")
+		actuatorMode.Set(1)
 	} else {
 		msg = "0"
 		log.Println("Switching actuator in home heating position")
+		actuatorMode.Set(0)
 	}
-
 	if err := mqttclient.Publish(client, actuators.Switch, 0, false, msg); err != nil {
 		return
 	}
@@ -129,6 +151,7 @@ func sw(desiredState bool) {
 func failsafe() bool {
 	if sensors.HeaterOut.Value >= settings.HeaterCritical.Value {
 		heater(false, "critical heater temperature reached")
+		failsafeTotal.Inc()
 		time.Sleep(1 * time.Second)
 		return true
 	}
@@ -220,6 +243,10 @@ func init() {
 	if err := mqttclient.Publish(client, actuators.Switch, 0, false, "0"); err != nil {
 		log.Fatalf("Cannot reset switch. Exiting.")
 	}
+
+	// Register metrics endpoint
+	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(":7002", nil)
 
 	// Wait for sensors data
 	waitForData(lockTemp)
