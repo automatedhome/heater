@@ -244,15 +244,20 @@ func init() {
 		log.Fatalf("Cannot reset switch. Exiting.")
 	}
 
-	// Register metrics endpoint
-	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":7002", nil)
-
 	// Wait for sensors data
 	waitForData(lockTemp)
 }
 
 func main() {
+	go func() {
+		// Expose metrics
+		http.Handle("/metrics", promhttp.Handler())
+		err := http.ListenAndServe(":7002", nil)
+		if err != nil {
+			panic("HTTP Server for metrics exposition failed: " + err.Error())
+		}
+	}()
+
 	for {
 		time.Sleep(1 * time.Second)
 
